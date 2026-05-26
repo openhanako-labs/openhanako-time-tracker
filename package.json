@@ -1,6 +1,6 @@
 {
   "name": "hana-time-tracker",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Hanako 时间追踪插件 — 本地窗口活动监控与可视化",
   "type": "module",
   "main": "index.js",

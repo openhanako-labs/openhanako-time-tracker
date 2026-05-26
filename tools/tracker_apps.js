@@ -8,9 +8,13 @@ export const parameters = { type: "object", properties: {} };
 
 export async function execute(input, ctx) {
   const st = await import("../lib/storage.js");
-  return st.getAllAppMappings().map(m => ({
+  const data = st.getAllAppMappings().map(m => ({
     processName: m.processName,
     displayName: m.displayName,
     category: m.category,
   }));
+  return {
+    content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+    details: data,
+  };
 }

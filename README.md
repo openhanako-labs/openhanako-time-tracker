@@ -38,7 +38,7 @@ npm install
 ## 文档
 
 - 仪表盘：Hanako 侧边栏 → Hanako Time Tracker
-- Agent 工具：`tracker_status` / `tracker_today` / `tracker_security` / `tracker_apps`
+- Agent 工具：`tracker_status` / `tracker_today` / `tracker_date` / `tracker_security` / `tracker_apps`
 
 ## License
 

@@ -8,5 +8,9 @@ export const parameters = { type: "object", properties: {} };
 
 export async function execute(input, ctx) {
   const st = await import("../lib/storage.js");
-  return st.getSecurityLogs(20);
+  const data = st.getSecurityLogs(20);
+  return {
+    content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+    details: data,
+  };
 }

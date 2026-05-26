@@ -8,5 +8,9 @@ export const parameters = { type: "object", properties: {} };
 
 export async function execute(input, ctx) {
   const sess = await import("../lib/session.js");
-  return sess.getStatus();
+  const data = sess.getStatus();
+  return {
+    content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+    details: data,
+  };
 }

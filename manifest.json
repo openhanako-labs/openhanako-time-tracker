@@ -1,7 +1,7 @@
 {
   "id": "hana-time-tracker",
   "name": "时间统计",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "自动记录前台窗口活动 + 安全检测 + 时间统计看板。koffi + sql.js 本地优先。",
   "trust": "full-access",
   "minAppVersion": "0.82.0",

@@ -20,10 +20,16 @@ export async function execute(input, ctx) {
     appMap[s.processName] = appMap[s.processName] || { name: d, min: 0 };
     appMap[s.processName].min += Math.round(dur / 60);
   });
-  return {
+
+  const data = {
     totalActiveMin: Math.round(totalSec / 60),
     sessionCount: sessions.length,
     apps: Object.values(appMap).sort((a, b) => b.min - a.min),
     securityCount: st.getSecurityLogs(100).length,
+  };
+
+  return {
+    content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+    details: data,
   };
 }
