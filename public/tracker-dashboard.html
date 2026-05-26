@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hanako Time Tracker</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={};console.warn=function(){}</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #d4c5b9; border-radius: 3px; }
+  .tab-item { transition: all 0.2s ease; }
+  .tab-item.active { background: rgba(184,150,115,0.12); color: #6b4c3a; border-bottom: 2px solid #b89673; }
+  .tab-item:hover:not(.active) { background: rgba(184,150,115,0.06); }
+  .app-row:hover { background: rgba(184,150,115,0.06); }
+  .fade-in { animation: fadeIn 0.25s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  .cat-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .glass { background: rgba(255,253,250,0.72); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(184,150,115,0.18); }
+  .glass-dark { background: rgba(255,253,250,0.55); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid rgba(184,150,115,0.12); }
+  .range-btn { transition: all 0.15s ease; }
+  .range-btn.active { background: #b89673; color: white; border-color: #b89673; }
+  .compact .card { padding: 0.5rem !important; }
+  .compact .stat-value { font-size: 1.25rem !important; }
+  .compact .chart-h { height: 120px !important; }
+  .compact .list-row { padding: 0.25rem 0.5rem !important; }
+  .compact .list-row { font-size: 0.8rem !important; }
+@keyframes slideInRight{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}.animate-slide-in{animation:slideInRight .35s ease both}.switch-on{background:#b89673}.switch-off{background:#d4c5b9}
+  body[data-theme=dark]{background:#1a1a2e;color:#e0dcd5}
+  body[data-theme=dark] .glass{background:rgba(30,30,50,0.75);border-color:rgba(100,90,80,0.25)}
+  body[data-theme=dark] .glass-dark{background:rgba(30,30,50,0.55)}
+  body[data-theme=dark] .bg-white,.compact.list-row{background:transparent}
+  body[data-theme=dark] .text-\[\#6b4c3a\]{color:#d4c5b9}
+  body[data-theme=dark] .text-gray-500,.text-gray-400,.text-gray-600{color:#b0a898!important}
+  body[data-theme=dark] .text-gray-700,.text-gray-800{color:#e0dcd5!important}
+  body[data-theme=dark] .border-\[\#d4c5b9\]{border-color:rgba(100,90,80,0.3)}
+  body[data-theme=dark] .border-\[\#e8dfd5\]{border-color:rgba(100,90,80,0.2)}
+  body[data-theme=dark] select,input{background:#2a2a40;color:#e0dcd5;border-color:rgba(100,90,80,0.3)}
+</style>
+</head>
+<body class="bg-[#faf8f5] text-gray-800 h-screen flex flex-col overflow-hidden">
+
+<!-- Header -->
+<div class="flex items-center justify-between px-4 py-2.5 glass flex-shrink-0">
+  <span class="font-semibold text-sm text-[#6b4c3a]">Hanako Time Tracker</span>
+  <div class="flex items-center gap-3">
+    <select id="rangeSelect" class="text-xs border border-[#d4c5b9] rounded px-2 py-1 bg-white text-[#6b4c3a]" onchange="changeRange(this.value)">
+      <option value="today">今日</option>
+      <option value="week">本周</option>
+      <option value="month">本月</option>
+      <option value="all">全部</option>
+    </select>
+    <span class="text-xs text-gray-400" id="activeDays"></span>
+    <span class="text-xs text-gray-400" id="consecutiveDays"></span>
+    <span class="text-xs text-gray-400" id="lastRefresh"></span>
+    <button class="text-xs text-[#b89673] hover:text-[#8b6f4e] flex items-center gap-1" onclick="exportCSV()" title="导出CSV">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      导出
+    </button>
+    <button class="text-xs text-[#b89673] hover:text-[#8b6f4e] flex items-center gap-1" onclick="toggleSettings()" title="设置"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>
+    <button class="text-xs text-[#b89673] hover:text-[#8b6f4e] flex items-center gap-1" onclick="toggleCompact()" title="紧凑模式">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+    </button>
+    <button class="text-xs text-[#b89673] hover:text-[#8b6f4e] flex items-center gap-1" onclick="toggleCompare()" title="对比昨天"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></button>
+    <button class="text-xs text-[#b89673] hover:text-[#8b6f4e] flex items-center gap-1" onclick="exportMarkdown()" title="Markdown日报"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></button>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="flex border-b border-[#e8dfd5] bg-white/50 flex-shrink-0">
+  <button class="tab-item active px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500" data-tab="today" onclick="switchTab('today')">今日概览</button>
+  <button class="tab-item px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500" data-tab="timeline" onclick="switchTab('timeline')">时间视图</button>
+  <button class="tab-item px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500" data-tab="security" onclick="switchTab('security')">安全日志</button>
+  <button class="tab-item px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-gray-500" data-tab="apps" onclick="switchTab('apps')">应用管理</button>
+</div>
+
+<!-- Content -->
+<div class="flex-1 overflow-auto p-4" id="mainContent">
+
+  <!-- 今日概览 -->
+  <div id="tab-today" class="fade-in space-y-4">
+    <div id="pinnedSection" class="hidden glass rounded-lg p-3">
+      <div class="text-xs text-gray-500 mb-2">📌 置顶</div>
+      <div id="pinnedList" class="flex flex-wrap gap-2"></div>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div class="glass rounded-lg p-3 card">
+        <div class="text-xs text-gray-500 mb-1">有效时间</div>
+        <div class="text-2xl font-bold text-[#6b4c3a] stat-value" id="totalTime">—</div>
+        <div class="text-xs text-gray-400" id="sessionCount"></div>
+      </div>
+      <div class="glass rounded-lg p-3 card">
+        <div class="text-xs text-gray-500 mb-1">活跃应用</div>
+        <div class="text-2xl font-bold text-[#6b4c3a] stat-value" id="appCount">—</div>
+        <div class="text-xs text-gray-400" id="catCount"></div>
+      </div>
+    </div>
+    <div class="glass rounded-lg p-3 card" id="goalsCard">
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="text-xs font-medium text-gray-500">分类目标</h3>
+        <button class="text-xs text-gray-400 hover:text-[#6b4c3a]" onclick="toggleGoalEdit()" id="goalEditBtn">编辑</button>
+      </div>
+      <div id="goalsList" class="space-y-2"></div>
+      <div id="goalEditSection" class="hidden mt-2">
+        <div id="goalEditFields" class="space-y-2 mb-2"></div>
+        <div class="flex gap-2">
+          <button class="text-xs px-3 py-1 bg-[#8b6340] text-white rounded hover:opacity-80" onclick="saveGoals()">保存</button>
+          <button class="text-xs px-3 py-1 border border-[#d4c5b9] rounded text-gray-500" onclick="toggleGoalEdit()">取消</button>
+        </div>
+      </div>
+    </div>
+    <div id="compareSection" class="hidden glass rounded-lg p-3 card fade-in">
+      <div class="flex items-center justify-between mb-2"><h3 class="text-xs font-medium text-gray-500">同比昨日</h3><span class="text-xs text-gray-400" id="compareDate"></span></div>
+      <div class="grid grid-cols-2 gap-2 mb-2">
+        <div class="text-center p-2 rounded bg-white/40"><div class="text-xs text-gray-400">今日</div><div class="text-lg font-bold text-[#6b4c3a]" id="compareToday">—</div></div>
+        <div class="text-center p-2 rounded bg-white/40"><div class="text-xs text-gray-400">昨日</div><div class="text-lg font-bold text-[#6b4c3a]" id="compareYesterday">—</div></div>
+      </div>
+      <div id="compareCats" class="space-y-1 max-h-48 overflow-auto"></div>
+    </div>
+    <div class="grid grid-cols-2 gap-4">
+      <div class="glass rounded-lg p-4 card">
+        <h3 class="text-xs font-medium text-gray-500 mb-2">分类分布</h3>
+        <div id="pieChartWrapper" class="chart-h h-40"><canvas id="pieChart"></canvas></div>
+      </div>
+      <div class="glass rounded-lg p-4 card">
+        <h3 class="text-xs font-medium text-gray-500 mb-2">应用排行</h3>
+        <div id="barChartWrapper" class="chart-h h-40"><canvas id="barChart"></canvas></div>
+      </div>
+    </div>
+    <div class="glass rounded-lg p-4 card">
+      <h3 class="text-xs font-medium text-gray-500 mb-2">详细列表</h3>
+      <div id="todayList" class="space-y-0.5 max-h-96 overflow-auto"></div>
+    </div>
+    <div class="glass rounded-lg p-4 card">
+      <h3 class="text-xs font-medium text-gray-500 mb-2">窗口标题</h3>
+      <div id="titleList" class="space-y-0.5 max-h-64 overflow-auto"></div>
+    </div>
+  </div>
+
+  <!-- 时间视图 -->
+  <div id="tab-timeline" class="hidden fade-in">
+    <div class="glass rounded-lg p-4 mb-4">
+      <h3 class="text-xs font-medium text-gray-500 mb-3">活跃热力图</h3>
+      <div class="flex items-start gap-2">
+        <div class="grid grid-rows-7 text-[10px] text-gray-400 gap-y-[3px] pt-[1px] shrink-0">
+          <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+        </div>
+        <div id="heatmapGrid" class="overflow-x-auto"></div>
+      </div>
+      <div class="flex items-center gap-2 mt-2 text-[10px] text-gray-400">
+        <span>少</span>
+        <span class="w-3 h-3 rounded-sm" style="background:#f0ece6"></span>
+        <span class="w-3 h-3 rounded-sm" style="background:#d4c5b9"></span>
+        <span class="w-3 h-3 rounded-sm" style="background:#c4a88a"></span>
+        <span class="w-3 h-3 rounded-sm" style="background:#b08060"></span>
+        <span class="w-3 h-3 rounded-sm" style="background:#8b5a3a"></span>
+        <span>多</span>
+      </div>
+    </div>
+    <div class="glass rounded-lg p-4">
+      <h3 class="text-xs font-medium text-gray-500 mb-3">今日按小时活跃时长</h3>
+      <div id="timelineChartWrapper" class="h-48 mb-4 chart-h"><canvas id="timelineChart"></canvas></div>
+      <div id="timelineList" class="space-y-0.5 max-h-80 overflow-auto"></div>
+    </div>
+  </div>
+
+  <!-- 安全日志 -->
+  <div id="tab-security" class="hidden fade-in">
+    <div class="glass rounded-lg p-4">
+      <div class="flex items-center gap-3 mb-4">
+        <select id="sevFilter" class="border border-[#d4c5b9] rounded px-3 py-1.5 text-sm bg-white" onchange="renderSecurity()">
+          <option value="">全部级别</option>
+          <option value="high">高风险</option>
+          <option value="medium">中风险</option>
+          <option value="low">低风险</option>
+          <option value="info">信息</option>
+        </select>
+        <span id="secCount" class="text-xs text-gray-500"></span>
+      </div>
+      <div id="securityList" class="space-y-1 max-h-96 overflow-auto"></div>
+    </div>
+  </div>
+
+  <!-- 应用管理 -->
+  <div id="tab-apps" class="hidden fade-in">
+    <div class="glass rounded-lg p-4">
+      <div id="appsList" class="space-y-0.5 max-h-80 overflow-auto"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+var DATA = window.__INITIAL_DATA__ || { today: null, apps: [], security: [], timeline: null, pinned: [], range: 'today', apiBase: '/api/plugins/hana-time-tracker', exportDir: '' };
+var pieChart, barChart, timeChart;
+var refreshTimer = null;
+
+// 从页面 URL 获取 token
+var pageParams = new URLSearchParams(window.location.search);
+var AUTH_TOKEN = pageParams.get('token') || '';
+
+function apiUrl(path) {
+  var sep = path.indexOf('?') >= 0 ? '&' : '?';
+  return DATA.apiBase + path + (AUTH_TOKEN ? sep + 'token=' + encodeURIComponent(AUTH_TOKEN) : '');
+}
+
+var CAT_COLORS = {
+  writing: '#b89673', development: '#a67c52', browsing: '#c4956a',
+  communication: '#8b9e6a', entertainment: '#d4a574', gaming: '#c47a5a',
+  design: '#c48a7a', system: '#9e9e9e', other: '#b0a090'
+};
+var CAT_NAMES = {
+  writing: '写作', development: '开发', browsing: '浏览',
+  communication: '沟通', entertainment: '娱乐', gaming: '游戏',
+  design: '设计', system: '系统', other: '其他'
+};
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-item').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  ['today','timeline','security','apps'].forEach(t => document.getElementById('tab-' + t).classList.toggle('hidden', t !== tab));
+  if (tab === 'today') renderToday();
+  if (tab === 'timeline') { renderTimeline(); renderHeatmap(); }
+  if (tab === 'security') renderSecurity();
+  if (tab === 'apps') renderApps();
+}
+
+function fmtDuration(sec) {
+  if (sec < 60) return Math.round(sec) + 's';
+  if (sec < 3600) return Math.round(sec / 60) + 'm';
+  var h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60);
+  return h + 'h' + (m ? ' ' + m + 'm' : '');
+}
+
+function changeRange(range) {
+  DATA.range = range;
+  fetch(apiUrl('/data?range=' + range))
+    .then(r => r.json())
+    .then(d => {
+      DATA = d;
+      refreshCurrentTab();
+      renderBreakReminderToast();
+      document.getElementById('lastRefresh').textContent = new Date().toLocaleTimeString();
+      if (DATA.activeDays) document.getElementById('activeDays').textContent = '📅 ' + DATA.activeDays + ' 天';
+      if (DATA.consecutiveDays || DATA.consecutiveDays === 0) document.getElementById('consecutiveDays').textContent = '🔥 连续 ' + DATA.consecutiveDays + ' 天';
+    }).catch(() => {});
+}
+
+function exportCSV() {
+  var dir = document.getElementById('exportDir').value.trim();
+  if (dir) {
+    fetch(apiUrl('/export/save?type=csv')).then(function(r){return r.json()}).then(function(d){if(d.ok)showToast('CSV 已保存：'+d.filepath);else showToast('导出失败: '+(d.error||'?'))}).catch(function(e){showToast('导出失败: '+e.message)});
+    return;
+  }
+  fetch(apiUrl('/export'))
+    .then(r => {
+      var cd = r.headers.get('Content-Disposition') || '';
+      var fn = cd.match(/filename="?([^"]+)"?/);
+      var filename = fn ? fn[1] : 'time-tracker.csv';
+      return r.blob().then(function(blob) { return { blob: blob, filename: filename }; });
+    })
+    .then(function(o) {
+      var url = URL.createObjectURL(o.blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = o.filename;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('CSV 已下载：' + o.filename);
+    }).catch(function(e){showToast('导出失败: '+e.message)});
+}
+
+function refreshCurrentTab() {
+  var tab = document.querySelector('.tab-item.active');
+  var t = tab ? tab.dataset.tab : 'today';
+  switchTab(t);
+}
+
+function toggleCompact() {
+  document.getElementById('mainContent').classList.toggle('compact');
+}
+
+function renderToday() {
+  var t = DATA.today;
+  if (!t) { document.getElementById('todayList').innerHTML = '<div class="text-center text-gray-400 py-8">暂无数据</div>'; return; }
+
+  document.getElementById('totalTime').textContent = fmtDuration(t.totalActiveSec);
+  document.getElementById('sessionCount').textContent = t.sessionCount + ' 个会话片段';
+  var apps = Object.entries(t.apps || {});
+  document.getElementById('appCount').textContent = apps.length;
+  document.getElementById('catCount').textContent = Object.keys(t.categories || {}).length + ' 个分类';
+
+  // 饼图
+  try {
+    var cats = t.categories || {};
+    var pieW = document.getElementById('pieChartWrapper');
+    if (!pieW) throw new Error('pieChart wrapper missing');
+    pieW.innerHTML = '<canvas id="pieChart"></canvas>';
+    var pCtx = document.getElementById('pieChart').getContext('2d');
+    if (pieChart) { try { pieChart.destroy(); } catch(_) {} pieChart = null; }
+    pieChart = new Chart(pCtx, {
+      type: 'doughnut',
+      data: {
+        labels: Object.keys(cats).map(k => CAT_NAMES[k] || k),
+        datasets: [{
+          data: Object.values(cats).map(v => Math.round(v / 60)),
+          backgroundColor: Object.keys(cats).map(k => CAT_COLORS[k] || '#b0a090'),
+          borderWidth: 0
+        }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 11 } } }, tooltip: { callbacks: { label: function(context) { return context.label + ': ' + context.raw + 'm'; } } } } }
+    });
+  } catch(e) {
+    var pw = document.getElementById('pieChartWrapper');
+    if (pw) pw.innerHTML = '<div class="text-red-400 text-xs p-2">饼图加载失败: ' + e.message + '</div>';
+  }
+
+  // 柱状图
+  try {
+    var sorted = apps.filter(([,v]) => !v.exclude).sort((a,b) => b[1].duration - a[1].duration).slice(0, 8);
+    var barW = document.getElementById('barChartWrapper');
+    if (!barW) throw new Error('barChart wrapper missing');
+    barW.innerHTML = '<canvas id="barChart"></canvas>';
+    var bCtx = document.getElementById('barChart').getContext('2d');
+    if (barChart) { try { barChart.destroy(); } catch(_) {} barChart = null; }
+    barChart = new Chart(bCtx, {
+      type: 'bar',
+      data: {
+        labels: sorted.map(([,v]) => v.display),
+        datasets: [{
+          data: sorted.map(([,v]) => Math.round(v.duration / 60)),
+          backgroundColor: sorted.map(([,v]) => CAT_COLORS[v.category] || '#b0a090'),
+          borderRadius: 4
+        }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { callback: v => v + 'm' } }, x: { ticks: { maxRotation: 45, font: { size: 9 } } } } }
+    });
+  } catch(e) {
+    var bw = document.getElementById('barChartWrapper');
+    if (bw) bw.innerHTML = '<div class="text-red-400 text-xs p-2">排行图加载失败: ' + e.message + '</div>';
+  }
+
+  // 详细列表
+  try {
+    var all = apps.sort((a,b) => b[1].duration - a[1].duration);
+    document.getElementById('todayList').innerHTML = all.map(([proc, v]) =>
+      `<div class="app-row flex items-center justify-between px-3 py-1.5 rounded text-sm list-row">
+        <div class="flex items-center gap-2">
+          <span class="cat-dot" style="background:${CAT_COLORS[v.category]||'#b0a090'}"></span>
+          <span class="truncate" style="max-width:320px">${v.display}</span>
+          <span class="text-xs text-gray-400">${CAT_NAMES[v.category]||v.category}</span>
+          ${v.exclude?'<span class="text-xs text-gray-300">排除</span>':''}
+        </div>
+        <span class="text-gray-600 font-medium text-xs">${fmtDuration(v.duration)}</span>
+      </div>`
+    ).join('') || '<div class="text-center text-gray-400 py-4">暂无</div>';
+  } catch(e) {
+    document.getElementById('todayList').innerHTML = '<div class="text-red-400 text-xs p-2">列表加载失败: ' + e.message + '</div>';
+  }
+
+  renderPinned();
+  renderTitles();
+  renderGoals();
+}
+
+function renderHeatmap() {
+  var daily = DATA.dailyTotals || [];
+  if (!daily.length) {
+    document.getElementById('heatmapGrid').innerHTML = '<div class="text-xs text-gray-400 py-2">暂无数据</div>';
+    return;
+  }
+  var map = {};
+  daily.forEach(function(d) { map[d.date] = d.totalSec; });
+
+  // 算范围：最近 84 天（12 周），对齐到周一
+  var now = new Date();
+  var end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var start = new Date(end);
+  start.setDate(start.getDate() - 83);
+  // 对齐到周一
+  var dayOfWeek = start.getDay() || 7;
+  start.setDate(start.getDate() - (dayOfWeek - 1));
+
+  var cols = [];
+  var d = new Date(start);
+  var week = [];
+  var colIdx = 0;
+  while (d <= end) {
+    var ds = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    var sec = map.hasOwnProperty(ds) ? map[ds] : -1;
+    var mins = sec < 0 ? 0 : Math.round(sec / 60);
+    var level = sec < 0 ? -1 : mins === 0 ? 0 : mins < 30 ? 1 : mins < 120 ? 2 : mins < 360 ? 3 : 4;
+    var colors = ['#f0ece6', '#d4c5b9', '#c4a88a', '#b08060', '#8b5a3a'];
+    var noDataColor = '#fafaf7';
+    var color = level < 0 ? noDataColor : colors[level];
+    var tooltip = sec < 0 ? ds + '\n(无记录)' : ds + '\n' + (mins >= 60 ? Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm' : mins + 'm');
+    week.push({ date: ds, mins: mins, color: color, tooltip: tooltip });
+    if (week.length === 7) {
+      cols.push(week);
+      week = [];
+    }
+    d.setDate(d.getDate() + 1);
+  }
+  if (week.length) cols.push(week);
+
+  // 渲染：每列是 7 天（周一到周日），从左到右是旧到新
+  var html = '<div class="flex gap-[3px]">';
+  cols.forEach(function(weekDays) {
+    html += '<div class="flex flex-col gap-[3px]">';
+    weekDays.forEach(function(cell) {
+      html += '<div class="w-3 h-3 rounded-sm" style="background:' + cell.color + '" title="' + cell.tooltip + '"></div>';
+    });
+    html += '</div>';
+  });
+  html += '</div>';
+  document.getElementById('heatmapGrid').innerHTML = html;
+}
+
+function renderGoals() {
+  var cats = DATA.today?.categories || {};
+  var goals = DATA.goals || { writing: 180, development: 240, browsing: 60, communication: 90, design: 60, entertainment: 120, gaming: 120, other: 30 };
+  var names = DATA.goalNames || {};
+  var html = '';
+  Object.entries(goals).forEach(function(_ref) {
+    var cat = _ref[0];
+    var goalMin = _ref[1];
+    var currentSec = cats[cat] || 0;
+    var currentMin = Math.round(currentSec / 60);
+    var pct = Math.min(100, Math.round(currentMin / goalMin * 100));
+    var color = CAT_COLORS[cat] || '#b0a090';
+    var name = names[cat] || cat;
+    if (currentMin === 0 && pct === 0) return;
+    html += '<div class="flex items-center gap-2"><span class="text-xs w-10 text-gray-500">' + name + '</span><div class="flex-1 h-3 bg-white/50 rounded-full overflow-hidden"><div style="width:' + pct + '%;background:' + color + '" class="h-full rounded-full transition-all"></div></div><span class="text-xs text-gray-400 w-16 text-right">' + currentMin + '/' + goalMin + 'm</span></div>';
+  });
+  document.getElementById('goalsList').innerHTML = html || '<div class="text-xs text-gray-400">今日暂无数据</div>';
+}
+
+var goalEditing = false;
+function toggleGoalEdit() {
+  goalEditing = !goalEditing;
+  var goals = DATA.goals || { writing: 180, development: 240, browsing: 60, communication: 90, design: 60, entertainment: 120, gaming: 120, other: 30 };
+  var names = DATA.goalNames || {};
+  var section = document.getElementById('goalEditSection');
+  var btn = document.getElementById('goalEditBtn');
+  var list = document.getElementById('goalsList');
+  if (goalEditing) {
+    btn.textContent = '取消';
+    section.classList.remove('hidden');
+    list.classList.add('hidden');
+    var html = '';
+    Object.entries(goals).forEach(function(e) {
+      var cat = e[0];
+      var min = e[1];
+      var name = names[cat] || cat;
+      html += '<div class="flex items-center gap-2 mb-2"><input type="text" class="w-16 border border-[#d4c5b9] rounded px-1 py-0.5 text-xs" value="' + escHtml(name) + '" data-cat-name="' + cat + '"><input type="number" class="flex-1 border border-[#d4c5b9] rounded px-2 py-1 text-xs" value="' + min + '" data-cat="' + cat + '" min="0" step="5"><span class="text-xs text-gray-400 w-4">m</span></div>';
+    });
+    document.getElementById('goalEditFields').innerHTML = html;
+  } else {
+    btn.textContent = '编辑';
+    section.classList.add('hidden');
+    list.classList.remove('hidden');
+  }
+}
+
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function saveGoals() {
+  var inputs = document.querySelectorAll('#goalEditFields input');
+  var goals = {};
+  var goalNames = {};
+  inputs.forEach(function(inp) {
+    if (inp.dataset.catName) {
+      goalNames[inp.dataset.catName] = inp.value.trim() || inp.dataset.catName;
+    } else {
+      goals[inp.dataset.cat] = parseInt(inp.value) || 0;
+    }
+  });
+  fetch(apiUrl('/goal'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ goals: goals, goalNames: goalNames })
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.ok) {
+      DATA.goals = goals;
+      DATA.goalNames = goalNames;
+      toggleGoalEdit();
+      renderGoals();
+    } else {
+      alert('保存失败: ' + (d.error || '未知错误'));
+    }
+  }).catch(function(e) {
+    alert('保存失败: ' + e.message);
+  });
+}
+
+function renderTitles() {
+  var titles = DATA.topTitles || [];
+  if (!titles.length) {
+    document.getElementById('titleList').innerHTML = '<div class="text-center text-gray-400 py-4 text-xs">暂无</div>';
+    return;
+  }
+  document.getElementById('titleList').innerHTML = titles.map(function(item) {
+    return '<div class="flex justify-between items-center py-0.5"><span class="text-xs text-gray-600 truncate max-w-[260px]" title="' + item.title.replace(/"/g,'&quot;') + '">' + item.title + '</span><span class="text-xs text-gray-500 shrink-0 ml-2">' + fmtDuration(item.duration) + '</span></div>';
+  }).join('');
+}
+
+function renderPinned() {
+  var pinned = DATA.pinned || [];
+  var today = DATA.today;
+  var section = document.getElementById('pinnedSection');
+  var list = document.getElementById('pinnedList');
+  if (!pinned.length) { section.classList.add('hidden'); return; }
+  section.classList.remove('hidden');
+  var apps = today ? today.apps || {} : {};
+  list.innerHTML = pinned.map(proc => {
+    var info = apps[proc.toLowerCase()] || apps[proc];
+    var dur = info ? fmtDuration(info.duration) : '—';
+    var cat = info ? info.category : 'other';
+    return `<div class="flex items-center gap-1.5 glass-dark rounded-full px-3 py-1 text-xs cursor-pointer hover:bg-white/40" onclick="togglePin('${proc.replace(/'/g,"\\'")}')">
+      <span class="cat-dot" style="background:${CAT_COLORS[cat]||'#b0a090'}"></span>
+      <span>${info ? info.display : proc}</span>
+      <span class="text-gray-500">${dur}</span>
+      <span class="text-gray-400 ml-0.5">✕</span>
+    </div>`;
+  }).join('');
+}
+
+function renderTimeline() {
+  var tl = DATA.timeline || [];
+  var wrapper = document.getElementById('timelineChartWrapper');
+  var canvas = document.getElementById('timelineChart');
+  if (!tl || !tl.length) {
+    if (wrapper) wrapper.innerHTML = '<canvas id="timelineChart"></canvas><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)" class="text-gray-400">暂无数据</div>';
+    document.getElementById('timelineList').innerHTML = '';
+    return;
+  }
+  if (wrapper) { wrapper.innerHTML = '<canvas id="timelineChart"></canvas>'; canvas = document.getElementById('timelineChart'); }
+  if (!canvas) { console.warn('[tracker] timelineChart canvas missing'); return; }
+  if (timeChart) timeChart.destroy();
+  timeChart = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: tl.map(t => t.hour + ':00'),
+      datasets: [{
+        data: tl.map(t => t.minutes),
+        backgroundColor: tl.map(t => {
+          var m = t.minutes;
+          if (m === 0) return '#e5e0d8';
+          if (m > 30) return '#c47a5a';
+          if (m > 5) return '#d4a574';
+          return '#8b9e6a';
+        }),
+        borderRadius: 4,
+        maxBarThickness: 28
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { callback: v => v + 'm' } },
+        x: { ticks: { maxRotation: 0, font: { size: 10 } } }
+      }
+    }
+  });
+  document.getElementById('timelineList').innerHTML = tl.map(t =>
+    `<div class="flex items-center justify-between px-3 py-1.5 rounded text-sm ${t.minutes === 0 ? 'text-gray-300' : 'bg-white/50'} list-row">
+      <div class="flex items-center gap-2">
+        <span class="text-xs font-medium w-12 text-right">${String(t.hour).padStart(2,'0')}:00</span>
+        <span class="text-xs ${t.minutes === 0 ? 'text-gray-300' : 'text-gray-400'} truncate">${t.minutes === 0 ? '💤 空闲' : t.apps.join(', ')}</span>
+      </div>
+      <span class="text-xs font-medium" style="color:${t.minutes===0?'#ccc':t.minutes>30?'#c47a5a':t.minutes>5?'#d4a574':'#8b9e6a'}">${t.minutes === 0 ? '' : fmtDuration(t.minutes*60)}</span>
+    </div>`
+  ).join('');
+}
+
+function renderSecurity() {
+  var logs = DATA.security || [];
+  var sev = document.getElementById('sevFilter').value;
+  if (sev) logs = logs.filter(l => l.severity === sev);
+  document.getElementById('secCount').textContent = '共 ' + logs.length + ' 条';
+  var sevColors = { high: 'bg-red-100 text-red-700', medium: 'bg-orange-100 text-orange-700', low: 'bg-yellow-100 text-yellow-700', info: 'bg-gray-100 text-gray-600' };
+  document.getElementById('securityList').innerHTML = logs.length
+    ? logs.map(l => `<div class="flex items-start gap-2 px-3 py-2 rounded border border-[#e8dfd5] text-sm">
+        <span class="text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${sevColors[l.severity]||sevColors.info}">${l.severity||'info'}</span>
+        <div class="flex-1 min-w-0">
+          <div class="text-gray-700 truncate">${l.reason}</div>
+          <div class="text-xs text-gray-400">${l.processName} · ${new Date(l.time).toLocaleString()}</div>
+        </div>
+      </div>`).join('')
+    : '<div class="text-center text-gray-400 py-8">暂无记录</div>';
+}
+
+function renderApps() {
+  var apps = DATA.apps || [];
+  apps.sort((a,b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    return (a.displayName||'').localeCompare(b.displayName||'');
+  });
+  document.getElementById('appsList').innerHTML = apps.length
+    ? apps.map(a => `<div class="flex items-center gap-2 px-3 py-1.5 text-sm rounded hover:bg-white/60 list-row">
+        <span class="cat-dot" style="background:${CAT_COLORS[a.category]||'#b0a090'}"></span>
+        <span>${a.displayName||a.processName}</span>
+        <span class="text-xs text-gray-400">${a.processName} · ${CAT_NAMES[a.category]||a.category}</span>
+        ${a.exclude?'<span class="text-xs text-gray-300">排除</span>':''}
+        <button class="ml-auto text-xs px-2 py-0.5 rounded border border-[#d4c5b9] text-gray-500 hover:bg-white/60" onclick="togglePin('${a.processName.replace(/'/g,"\\'")}')">${a.pinned?'📌取消':'📌'}</button>
+      </div>`).join('')
+    : '<div class="text-center text-gray-400 py-8">暂无数据</div>';
+}
+
+function togglePin(proc) {
+  var pinned = (DATA.pinned || []).includes(proc);
+  fetch(apiUrl('/pin'), {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ action: pinned ? 'unpin' : 'pin', processName: proc })
+  }).then(r => r.json()).then(() => {
+    if (pinned) {
+      DATA.pinned = (DATA.pinned || []).filter(p => p !== proc);
+    } else {
+      DATA.pinned = (DATA.pinned || []).concat([proc]);
+    }
+    renderApps();
+    renderPinned();
+  });
+}
+
+// 自动刷新 (30s)
+function startAutoRefresh() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(() => {
+    fetch(apiUrl('/data?range=' + (DATA.range || 'today')))
+      .then(r => r.json())
+      .then(d => { DATA = d; refreshCurrentTab(); renderBreakReminderToast(); document.getElementById('lastRefresh').textContent = new Date().toLocaleTimeString(); })
+      .catch(() => {});
+  }, 30000);
+}
+
+window.addEventListener('pagehide', function() {
+  if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+});
+window.addEventListener('beforeunload', function() {
+  if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+});
+
+document.getElementById('lastRefresh').textContent = new Date().toLocaleTimeString();
+if (DATA.activeDays) {
+  document.getElementById('activeDays').textContent = '📅 ' + DATA.activeDays + ' 天';
+}
+if (DATA.consecutiveDays || DATA.consecutiveDays === 0) {
+  document.getElementById('consecutiveDays').textContent = '🔥 连续 ' + DATA.consecutiveDays + ' 天';
+}
+
+renderToday();
+startAutoRefresh();
+
+if (DATA.error) {
+  var err = document.createElement('div');
+  err.className = 'fixed bottom-4 right-4 bg-red-100 border border-red-300 text-red-800 rounded-lg px-4 py-2 text-sm shadow';
+  err.textContent = '⚠ 数据加载异常: ' + DATA.error;
+  document.body.appendChild(err);
+}
+
+if (window.parent) {
+  window.parent.postMessage({ type: 'ready' }, '*');
+}
+
+// 设置弹窗
+function toggleSettings(){var o=document.getElementById('settingsOverlay');o.classList.remove('hidden');if(DATA.breakReminderMinutes)document.getElementById('breakMinutes').value=DATA.breakReminderMinutes;if(DATA.exportDir)document.getElementById('exportDir').value=DATA.exportDir;renderBreakToggle();renderDarkToggle()}
+function closeSettings(){document.getElementById('settingsOverlay').classList.add('hidden')}
+document.addEventListener('click',function(e){var o=document.getElementById('settingsOverlay');if(!o||o.classList.contains('hidden'))return;var m=document.getElementById('settingsModal');if(m&&m.contains(e.target))return;var b=e.target.closest('[onclick*="toggleSettings"]');if(b)return;o.classList.add('hidden')});
+
+// 久坐提醒
+function toggleBreakReminder(){var e=DATA.breakReminderEnabled==='1';var nv=e?'0':'1';fetch(apiUrl('/settings'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:'break_reminder_enabled',value:nv})}).then(function(r){return r.json()}).then(function(d){if(d.ok){DATA.breakReminderEnabled=nv;renderBreakToggle()}}).catch(function(){})}
+function saveBreakMinutes(v){var val=parseInt(v)||90;if(val<15)val=15;if(val>300)val=300;fetch(apiUrl('/settings'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:'break_reminder_minutes',value:String(val)})}).then(function(r){return r.json()}).then(function(d){if(d.ok){DATA.breakReminderMinutes=String(val)}}).catch(function(){})}
+function renderBreakToggle(){var e=DATA.breakReminderEnabled==='1';var t=document.getElementById('breakTrack');var b=document.getElementById('breakThumb');if(!t||!b)return;if(e){t.style.background='#b89673';b.style.transform='translateX(16px)'}else{t.style.background='#d4c5b9';b.style.transform='translateX(0)'}}
+function testBreakReminder(){var t=document.getElementById('breakReminderToast');var m=document.getElementById('breakReminderMsg');var tm=document.getElementById('breakReminderTime');if(!t||!m||!tm)return;m.textContent='\u6d4b\u8bd5\u63d0\u9192\uff1a\u8fde\u7eed\u5de5\u4f5c 92 \u5206\u949f\uff0c\u8be5\u8d77\u6765\u6d3b\u52a8\u4e00\u4e0b\u4e86';tm.textContent=new Date().toLocaleTimeString();t.style.display='flex'}
+function dismissBreakReminder(){var t=document.getElementById('breakReminderToast');if(t)t.style.display='none';fetch(apiUrl('/dismiss-break-reminder'),{method:'POST',headers:{'Content-Type':'application/json'}}).catch(function(){})}
+function renderBreakReminderToast(){var r=DATA.breakReminder;var t=document.getElementById('breakReminderToast');if(!t)return;if(!r||!r.triggered){t.style.display='none';return}var m=document.getElementById('breakReminderMsg');var tm=document.getElementById('breakReminderTime');if(m)m.textContent=r.message;if(tm)tm.textContent=new Date(r.time).toLocaleTimeString();t.style.display='flex';fetch(apiUrl('/dismiss-break-reminder'),{method:'POST',headers:{'Content-Type':'application/json'}}).catch(function(){})}
+function showToast(msg){var el=document.createElement('div');el.style.cssText='position:fixed;bottom:16px;right:16px;z-index:99999;background:rgba(255,253,250,0.92);backdrop-filter:blur(12px);border:1px solid rgba(184,150,115,0.18);border-radius:8px;padding:10px 16px;font-size:13px;color:#555;box-shadow:0 4px 16px rgba(0,0,0,0.08)';el.textContent='\u2935 '+msg+'（浏览器下载文件夹）';document.body.appendChild(el);setTimeout(function(){el.remove()},3000)}
+
+// 导出目录
+function saveExportDir(v){var val=v.trim();fetch(apiUrl('/settings'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:'export_dir',value:val})}).then(function(r){return r.json()}).then(function(d){if(d.ok)showToast('\u2714 \u5bfc\u51fa\u76ee\u5f55\u5df2\u4fdd\u5b58')}).catch(function(){})}
+
+// Markdown 导出
+function exportMarkdown(){var dir=document.getElementById('exportDir').value.trim();if(dir){fetch(apiUrl('/export/save?type=markdown')).then(function(r){return r.json()}).then(function(d){if(d.ok)showToast('日报已保存：'+d.filepath);else showToast('导出失败: '+(d.error||'?'))}).catch(function(e){showToast('导出失败: '+e.message)});return}}
+
+// 同比昨日
+var _yd=null;function toggleCompare(){var s=document.getElementById('compareSection');if(s.classList.contains('hidden')){s.classList.remove('hidden');fetchCompare()}else{s.classList.add('hidden')}}
+function fetchCompare(){fetch(apiUrl('/data/yesterday')).then(function(r){return r.json()}).then(function(d){_yd=d;renderCompare()}).catch(function(){})}
+function renderCompare(){var y=_yd;if(!y||y.error){document.getElementById('compareCats').innerHTML='<div class="text-xs text-gray-400 text-center py-2">昨日无数据</div>';return}
+document.getElementById('compareDate').textContent=y.date;var ts=DATA.today?DATA.today.totalActiveSec||0:0;document.getElementById('compareToday').textContent=fmtDuration(ts);document.getElementById('compareYesterday').textContent=fmtDuration(y.totalActiveSec)
+var cats=DATA.today?DATA.today.categories||{}:{};var ac=new Set([].concat(Object.keys(cats)).concat(Object.keys(y.categories||{})));var h='';ac.forEach(function(c){var tm=Math.round((cats[c]||0)/60);var ym=Math.round((y.categories[c]||0)/60);var d=tm-ym;var cls=d>0?'color:#6ba86b':d<0?'color:#c47a5a':'color:#b0a090';var a=d>0?'↑':d<0?'↓':'→';var p=ym>0?Math.round(d/ym*100):d>0?100:0;h+='<div class="flex items-center justify-between px-2 py-0.5 text-xs"><span class="flex items-center gap-1"><span class="cat-dot" style="background:'+(CAT_COLORS[c]||'#b0a090')+'"></span>'+(CAT_NAMES[c]||c)+'</span><span style="'+cls+'" title="今日 '+tm+'m / 昨日 '+ym+'m">'+a+' '+(p>0?'+':'')+p+'% <span style="color:#b0a090">('+tm+'/'+ym+'m)</span></span></div>'});document.getElementById('compareCats').innerHTML=h||'<div class="text-xs text-gray-400 text-center py-2">暂无分类数据</div>'}
+
+// 深色模式
+function toggleDarkMode(){var d=document.body.dataset.theme==='dark';var n=d?'light':'dark';document.body.dataset.theme=n;try{localStorage.setItem('hana-tracker-theme',n)}catch(e){}renderDarkToggle()}
+function renderDarkToggle(){var d=document.body.dataset.theme==='dark';var t=document.getElementById('darkTrack');var b=document.getElementById('darkThumb');if(!t||!b)return;if(d){t.style.background='#b89673';b.style.transform='translateX(16px)'}else{t.style.background='#d4c5b9';b.style.transform='translateX(0)'}}
+try{var ts=localStorage.getItem('hana-tracker-theme');if(ts)document.body.dataset.theme=ts}catch(e){}
+
+// 初始化
+try{var _bm=document.getElementById('breakMinutes');if(_bm&&DATA.breakReminderMinutes)_bm.value=DATA.breakReminderMinutes}catch(e){}try{var _ed=document.getElementById('exportDir');if(_ed&&DATA.exportDir)_ed.value=DATA.exportDir}catch(e){}
+renderBreakToggle();
+renderBreakReminderToast();
+renderDarkToggle();
+</script>
+<!-- 久坐提醒通知 -->
+<div id="breakReminderToast" class="hidden" style="position:fixed;top:0;left:0;right:0;bottom:0;z-index:999999;background:rgba(0,0,0,0.4);align-items:center;justify-content:center" onclick="dismissBreakReminder()">
+  <div style="background:rgba(255,253,250,0.96);backdrop-filter:blur(16px);border:1px solid rgba(184,150,115,0.25);border-radius:16px;padding:28px 32px;max-width:400px;width:90%;box-shadow:0 12px 48px rgba(0,0,0,0.2);text-align:center" id="settingsModal">
+    <div style="font-size:48px;margin-bottom:12px">🧘</div>
+    <div class="text-sm font-medium" style="color:#6b4c3a;font-size:18px;margin-bottom:8px" id="breakReminderMsg"></div>
+    <div class="text-xs" style="color:#b0a898;font-size:12px;margin-bottom:20px" id="breakReminderTime"></div>
+    <button style="background:#b89673;color:white;border:none;border-radius:8px;padding:10px 28px;font-size:14px;cursor:pointer" onclick="dismissBreakReminder()">知道了</button>
+  </div>
+</div>
+<!-- 设置弹窗 -->
+<div id="settingsOverlay" class="hidden fixed inset-0 z-[99999] flex items-start justify-center pt-16" style="background:rgba(0,0,0,0.25)">
+  <div class="w-80" style="background:rgba(255,253,250,0.92);backdrop-filter:blur(16px);border:1px solid rgba(184,150,115,0.2);border-radius:12px;padding:20px;box-shadow:0 8px 32px rgba(0,0,0,0.12)" id="settingsModal">
+    <div class="flex items-center justify-between mb-4"><span class="text-sm font-medium" style="color:#6b4c3a">设置</span><button class="text-sm" style="color:#b0a090;border:none;background:none;cursor:pointer" onclick="closeSettings()">✕</button></div>
+    <div class="flex items-center justify-between mb-3">
+      <label class="text-xs" style="color:#8b7a6a">久坐提醒</label>
+      <button id="breakToggle" class="relative" style="width:36px;height:20px;border-radius:10px;border:none;cursor:pointer;background:#d4c5b9;transition:background .2s" onclick="toggleBreakReminder()">
+        <span class="absolute inset-0 rounded-full transition-colors" id="breakTrack" style="background:#d4c5b9;border-radius:10px;position:absolute;inset:0"></span>
+        <span id="breakThumb" style="position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:white;box-shadow:0 1px 3px rgba(0,0,0,0.15);transition:transform .2s;transform:translateX(0)"></span>
+      </button>
+    </div>
+    <div class="flex items-center justify-between">
+      <label class="text-xs" style="color:#8b7a6a">提醒间隔（分钟）</label>
+      <div class="flex items-center gap-1"><input id="breakMinutes" type="number" min="15" max="300" step="5" style="width:64px;text-align:center;font-size:12px;border:1px solid #d4c5b9;border-radius:4px;padding:4px 8px" value="90" onchange="saveBreakMinutes(this.value)"><span class="text-xs" style="color:#b0a090">分</span></div>
+    </div>
+    <div class="flex items-center justify-between mt-3 pt-3" style="border-top:1px solid rgba(184,150,115,0.2)">
+      <label class="text-xs" style="color:#8b7a6a">深色模式</label>
+      <button id="darkToggle" class="relative" style="width:36px;height:20px;border-radius:10px;border:none;cursor:pointer;background:#d4c5b9;transition:background .2s" onclick="toggleDarkMode()">
+        <span id="darkTrack" style="background:#d4c5b9;border-radius:10px;position:absolute;inset:0"></span>
+        <span id="darkThumb" style="position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:white;box-shadow:0 1px 3px rgba(0,0,0,0.15);transition:transform .2s;transform:translateX(0)"></span>
+      </button>
+    </div>
+    <div class="flex items-center justify-between mt-3 pt-3" style="border-top:1px solid rgba(184,150,115,0.2)">
+      <label class="text-xs" style="color:#8b7a6a">导出目录</label>
+      <div class="flex items-center gap-1"><input id="exportDir" type="text" placeholder="留空=浏览器下载" style="width:180px;font-size:11px;border:1px solid #d4c5b9;border-radius:4px;padding:4px 6px" value="" onchange="saveExportDir(this.value)"></div>
+    </div>
+    <div class="mt-3 pt-3" style="border-top:1px solid rgba(184,150,115,0.2);text-align:center">
+      <button style="font-size:11px;color:#b89673;border:1px solid #b89673;border-radius:4px;padding:4px 12px;background:none;cursor:pointer" onclick="testBreakReminder()">\u6d4b\u8bd5\u4e45\u5750\u63d0\u9192</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

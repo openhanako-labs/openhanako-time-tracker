@@ -1,0 +1,14 @@
+{
+  "name": "hana-time-tracker",
+  "version": "0.5.0",
+  "description": "Hanako 时间追踪插件 — 本地窗口活动监控与可视化",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "build:zip": "powershell -Command \"Compress-Archive -Path index.js,manifest.json,package.json,lib,routes,public,node_modules -DestinationPath hana-time-tracker-v0.4.0.zip -Force\""
+  },
+  "dependencies": {
+    "koffi": "^2.9.0",
+    "sql.js": "^1.11.0"
+  }
+}
