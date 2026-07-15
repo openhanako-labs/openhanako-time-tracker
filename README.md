@@ -1,5 +1,9 @@
 # Hanako Time Tracker
 
+
+![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)
+
+
 Hanako 时间追踪插件 — 本地窗口活动监控与可视化仪表盘。
 
 **功能**：自动轮询前台窗口、应用使用时长统计、安全日志（高风险进程/深夜活动检测）、置顶应用、时间线视图、CSV 导出。
